@@ -7,34 +7,32 @@ using System.Text;
 using System.Net.Sockets;
 using System.Net;
 using Assets;
+using System.Threading;
 
 public class BlockController : MonoBehaviour
 {
-    Vector3 velocityInSeconds;
+    public float b;
+    public float c;
+    public float d;
+
+    float brakeFactor;
     Vector3 prevPosRight = new Vector3(0, 0, 0);
     Vector3 prevPosLeft = new Vector3(0, 0, 0);
     Vector3 prevPosStrafe = new Vector3(0, 0, 0);
     public static double encoderCountLeft = 0.0;
     public static double encoderCountRight = 0.0;
     public static double encoderCountStrafe = 0.0;
-    bool first = true;
 
     public static double heading;
+    public static double globalheading;
     public static double startheading;
 
     public float angDrag;
     public float spinForce;
     public float maxAngVel;
-    public static float signalScale = 6;
+    public static float signalScale = 2 * (float)(1.8/2.065);
+    public static float newsignalScale = 2 * (float)(1.8/2.065);
 
-
-    Vector3 targetPosition = new Vector3();
-    Vector3 lookAtTarget = new Vector3();
-    Quaternion playerRot = new Quaternion();
-
-    float rotSpeed = 5;
-    float speed = 10;
-    bool moving = false;
     Rigidbody rb;
 
     public Transform LeftOdoWheel;
@@ -46,36 +44,46 @@ public class BlockController : MonoBehaviour
     float forwardForce;
     float backwardForce;
 
-    float maxspeed = 0.3f;
-    float rotationalForce;
-    float Speed;
-    float AngularSpeed;
+    float rotationalForceN;
+    float rotationalForceP;
     public static Vector3 signalForce = new Vector3(0, 0);
     public static float signaltorque = 0;
-    public static SimpleTcpServer server = new SimpleTcpServer();
-    string status;
-    Vector3 prevvel;
-    Listener list = new Listener();
+    public static SimpleTcpServer server;
+    Listener list;
+    TeleOp tele;
 
     // Start is called before the first frame update
     void Start()
     {
+        tele = new TeleOp();
+        server = new SimpleTcpServer();
+        list = new Listener();
+
         rb = GetComponent<Rigidbody>();
+
+        //rb.centerOfMass = new Vector3(0, 0.3255587f, 0);
         list.StartListener();
     }
-    
-    int monitor;
 
-    int counter = 0;
+    public float torque;
 
     // Update is called once per frame
     void Update()
     {
+        if(OptionsInterface.Mass != 0)
+        {
+            rb.mass = OptionsInterface.Mass / 2.205f;
+        }
+
         Vector3 deltaPosRight = RightOdoWheel.position - prevPosRight;
         Vector3 deltaPosLeft = LeftOdoWheel.position - prevPosLeft;
         Vector3 deltaPosStrafe = StrafeOdoWheel.position - prevPosStrafe;
 
-        heading = transform.rotation.eulerAngles.y - startheading;
+        heading = (transform.localRotation.eulerAngles.y - 180) - startheading;
+        globalheading = transform.rotation.eulerAngles.y;
+        Debug.Log(heading);
+
+        //Debug.Log(globalheading);
 
         prevPosRight = RightOdoWheel.position;
         prevPosLeft = LeftOdoWheel.position;
@@ -84,16 +92,13 @@ public class BlockController : MonoBehaviour
         encoderCountRight += ((rotated(deltaPosRight, heading * (Math.PI / 180)).z) / 0.05) / 10;
         encoderCountLeft += ((rotated(deltaPosLeft, heading * (Math.PI / 180)).z) / 0.05) / 10;
         encoderCountStrafe += ((rotated(deltaPosStrafe, heading * (Math.PI / 180)).x) / 0.05) / 10;
-        if (first)
+        if (GameButtons.reset)
         {
             encoderCountRight = 0.0;
             encoderCountLeft = 0.0;
             encoderCountStrafe = 0.0;
-            first = false;
+            GameButtons.reset = false;
         }
-        //Debug.Log("Right: " + encoderCountRight);
-        //Debug.Log("Left: " + encoderCountLeft);
-        //Debug.Log("Strafe: " + encoderCountStrafe);
 
         if (Input.GetKey(KeyCode.Q))
         {
@@ -107,109 +112,61 @@ public class BlockController : MonoBehaviour
 
     void FixedUpdate()
     {
+        //Translational:
+        double threshold = signalForce.magnitude > 0 ? signalForce.magnitude + 17 : newsignalScale + 17;
 
-        if (Input.GetKey(KeyCode.UpArrow))
+        rb.maxDepenetrationVelocity = (float)threshold;
+
+        if (OptionsInterface.AB)
         {
-            strafePForce = 3f;
+            brakeFactor = 100;
         }
-        
-        if (Input.GetKey(KeyCode.DownArrow))
+        else if (!OptionsInterface.AB)
         {
-            strafeNForce = -3f;
-        }
-        
-        if (Input.GetKey(KeyCode.RightArrow))
-        {
-            forwardForce = 3f;
-        }
-        
-        if (Input.GetKey(KeyCode.LeftArrow))
-        {
-            backwardForce = -3f;
+            brakeFactor = 10;
         }
 
-        if (Input.GetKey(KeyCode.A))
+        if (rb.velocity.magnitude < threshold)
         {
-            rotationalForce = -spinForce;
+            if(Input.GetKey(KeyCode.L) || Input.GetKey(KeyCode.J) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.W) || signalForce.magnitude != 0)
+            {
+                if (Listener.centric && signalForce.magnitude > 0)
+                {
+                    rb.AddRelativeForce(rotated(new Vector3((signalForce.x + tele.getYForce()) * (float)(Math.Sqrt(2)/2), 0, signalForce.y + tele.getXForce()), heading * (Math.PI / 180)), ForceMode.VelocityChange);
+                }
+                else if (OptionsInterface.FC && signalForce.magnitude == 0)
+                {
+                    rb.AddRelativeForce(rotated(new Vector3((signalForce.x + tele.getYForce()) * (float)(Math.Sqrt(2) / 2), 0, signalForce.y + tele.getXForce()), heading * (Math.PI / 180)), ForceMode.VelocityChange);
+                }
+                else
+                {
+                    rb.AddRelativeForce((signalForce.x + tele.getYForce()) * (float)(Math.Sqrt(2) / 2), 0, signalForce.y + tele.getXForce(), ForceMode.VelocityChange);
+                }
+                //Debug.Log(heading);
+            }
+            else
+            {
+                rb.AddForce(-brakeFactor * rb.velocity);
+            }
         }
 
-        if (Input.GetKey(KeyCode.D))
-        {
-            rotationalForce = spinForce;
-        }
+        double magnitude = rb.velocity.magnitude;
 
-        if (!Input.GetKey(KeyCode.LeftArrow) && !Input.GetKey(KeyCode.RightArrow) && !Input.GetKey(KeyCode.UpArrow) && !Input.GetKey(KeyCode.DownArrow) && !Input.GetKey(KeyCode.D) && !Input.GetKey(KeyCode.A))
-        {
-            strafePForce = 0.0f;
-            strafeNForce = 0.0f;
-            forwardForce = 0.0f;
-            backwardForce = 0.0f;
-            rotationalForce = 0.0f;
-        }
-
-        Speed = rb.velocity.magnitude;
-        AngularSpeed = rb.angularVelocity.magnitude / (float)(signaltorque * (Math.PI * 2));
-
-        rb.angularVelocity = new Vector3(0, (float)(signaltorque * (Math.PI * 2)), 0);
-
+        //Rotational:
         rb.SetMaxAngularVelocity(maxAngVel);
-
-        //Debug.Log(signalForce);
-        //Debug.Log(forwardForce);
-        //Debug.Log(backwardForce);
-        //Debug.Log(strafeNForce);
-        //Debug.Log(strafePForce);
-        //Debug.Log(signalForce.magnitude);
-        if (rb.velocity.magnitude < signalForce.magnitude + 2)
-        {
-            rb.AddForce(signalForce.x, 0, signalForce.y, ForceMode.VelocityChange);
-        }
-        //Debug.Log(signaltorque);
-
         rb.angularDrag = angDrag;
-        rb.AddTorque(0, 10 * signaltorque, 0);
-        //rb.AddTorque(0, 1000000, 0, ForceMode.VelocityChange);
-        //if (rb.velocity.magnitude < 4)
-        //{
-        //    rb.AddForce(forwardForce + backwardForce, 0, strafePForce + strafeNForce, ForceMode.VelocityChange);
-        //}
-        
-
+        rb.AddRelativeTorque(0, torque * ((signaltorque + (tele.getTorque()))), 0, ForceMode.VelocityChange);
     }
 
-    void SetTargetPosition()
+    void OnApplicationQuit()
     {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        RaycastHit hit;
-
-        if(Physics.Raycast(ray, out hit, 1000))
-        {
-            targetPosition = hit.point;
-            lookAtTarget = new Vector3(targetPosition.x - transform.position.x,
-                transform.position.y,
-                targetPosition.z - transform.position.z);
-            //this.transform.LookAt(targetPosition);
-            playerRot = Quaternion.LookRotation(lookAtTarget);
-            moving = true;
-        }
+        Debug.Log("Application ending after " + Time.time + " seconds");
+        list.runningstring = "stop";
+        Thread.Sleep(10);
+        list.stopper = true;
     }
 
-    void Move()
-    {
-        transform.rotation = Quaternion.Slerp(transform.rotation, playerRot, rotSpeed * Time.deltaTime);
-        transform.position = Vector3.MoveTowards(transform.position, targetPosition, speed * Time.deltaTime);
-        if(distTo(targetPosition, transform.position) <= 0.1)
-        {
-            moving = false;
-        }
-    }
-
-    private double distTo(Vector3 target, Vector3 current)
-    {
-        return Math.Sqrt(Math.Pow(target.x - current.x, 2.0) + Math.Pow(target.x - current.x, 2.0));
-    }
-
-    public Vector3 rotated(Vector3 input, double angle)
+    private Vector3 rotated(Vector3 input, double angle)
     {
         double newX = input.x * Math.Cos(angle) - input.z * Math.Sin(angle);
         double newY = input.x * Math.Sin(angle) + input.z * Math.Cos(angle);

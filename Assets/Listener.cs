@@ -12,30 +12,39 @@ namespace Assets
 {
     class Listener
     {
-        private string recievedMessage;
-        private Socket handler;
-        private byte[] bytes = new Byte[1024];
+        public string[] powers = new string[3];
+        public static bool centric = false;
+        Thread listenerThread = null;
+
+        public bool stopper = false;
         private bool odoisRequested = false;
-        private string runningstring;
-        public static bool stopper = false;
+        private bool gyroisRequested = false;
+        public string runningstring;
+
 
         public void StartListener()
         {
-            Thread listenerThread = new Thread(StartListeningThread);
+            if(listenerThread == null)
+            {
+                listenerThread = new Thread(StartListeningThread);
+            }
             listenerThread.Start();
         }
 
         public void StartListeningThread()
         {
-            // Data buffer for incoming data.  
+            stopper = false;
+            string recievedMessage;
             byte[] bytes = new Byte[1024];
+           
 
             // Establish the local endpoint for the socket.  
             // Dns.GetHostName returns the name of the
             // host running the application.  
             IPHostEntry ipHostInfo = Dns.GetHostEntry(Dns.GetHostName());
-            IPAddress ipAddress = ipHostInfo.AddressList[0];
-            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 11000);
+            IPAddress ipAddress = ipHostInfo.AddressList[1];
+            Debug.Log(ipAddress);
+            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 8719);
 
             // Create a TCP/IP socket.  
             Socket listener = new Socket(ipAddress.AddressFamily,
@@ -50,8 +59,10 @@ namespace Assets
                 listener.Bind(localEndPoint);
                 listener.Listen(10);
 
+                Socket handler = null;
+
                 // Start listening for connections.  
-                while (!stopper)
+                do
                 {
                     handler = listener.Accept();
                     recievedMessage = null;
@@ -61,7 +72,7 @@ namespace Assets
                     {
                         int bytesRec = handler.Receive(bytes);
                         recievedMessage = Encoding.ASCII.GetString(bytes, 0, bytesRec);
-                        
+
                         if (recievedMessage.IndexOf(",") > -1)
                         {
                             break;
@@ -78,19 +89,25 @@ namespace Assets
                         Debug.Log("None");
                     }
 
-                    if (odoisRequested)
-                    {
-                        runningstring = BlockController.encoderCountLeft.ToString() + "," + BlockController.encoderCountRight.ToString() + "," + BlockController.encoderCountStrafe.ToString();
-                    }
 
-                    if(odoisRequested)
+                    if (odoisRequested && gyroisRequested)
                     {
-                        send(runningstring);
+                        runningstring = "O" + "," + BlockController.encoderCountLeft.ToString() + "," + BlockController.encoderCountRight.ToString() + "," + BlockController.encoderCountStrafe.ToString() + "," + BlockController.heading.ToString();
+
+                        send(runningstring, handler);
+                        runningstring = "";
+                    }else if (odoisRequested)
+                    {
+                        runningstring = "O" + "," + BlockController.encoderCountLeft.ToString() + "," + BlockController.encoderCountRight.ToString() + "," + BlockController.encoderCountStrafe.ToString();
+                        send(runningstring, handler);
                         runningstring = "";
                     }
-                    
-                    stop();
-                }
+
+                    if (stopper)
+                    {
+                        stop(handler);
+                    }
+                } while (!stopper);
             }
             catch (Exception e)
             {
@@ -98,13 +115,13 @@ namespace Assets
             }
         }
 
-        public void stop()
+        public void stop(Socket handler)
         {
             handler.Shutdown(SocketShutdown.Both);
             handler.Close();
         }
 
-        public void send(string message)
+        public void send(string message, Socket handler)
         {
             // Echo the data back to the client.  
             byte[] msg = Encoding.ASCII.GetBytes(message);
@@ -114,32 +131,57 @@ namespace Assets
 
         private static char[] message;
         private static string messageFull;
+        string fullpowers;
 
         private void Parse(string messageFull)
         {
             Debug.Log(messageFull);
             message = messageFull.ToCharArray();
 
-            if (message[0] == 'p')
+            fullpowers = "";
+
+            for(int i = 2; i < (message.Length - 1); i++)
             {
-                BlockController.signalForce.x = float.Parse(message[1].ToString() + message[2].ToString() + message[3].ToString() + message[4].ToString());
-                BlockController.signalForce.y = float.Parse(message[5].ToString() + message[6].ToString() + message[7].ToString() + message[8].ToString());
-                BlockController.signaltorque = float.Parse(message[9].ToString() + message[10].ToString() + message[11].ToString() + message[12].ToString());
-                BlockController.signalForce.Scale(new Vector3(BlockController.signalScale, BlockController.signalScale));
+                fullpowers += message[i];
+            }
+
+            if (message[1] == 'p')
+            {
+                powers = fullpowers.Split('|');
+
+                BlockController.signalForce.x = float.Parse(powers[0]);
+                BlockController.signalForce.y = float.Parse(powers[1]);
+                BlockController.signaltorque = float.Parse(powers[2]);
+                BlockController.signalForce.Scale(new Vector3(BlockController.newsignalScale, BlockController.newsignalScale));
+                if(message[0] == 'c')
+                {
+                    centric = true;
+                }
                 Debug.Log(BlockController.signalForce);
-                //Debug.DrawLine(rb.position, signalForce);
             } 
             else if (message[0] == 'O')
             {
                 odoisRequested = true;
             }
-            else if (messageFull == "stop")
+            else if (message[0] == 'G')
             {
+                gyroisRequested = true;
+            }
+            else if (messageFull.Contains("stop"))
+            {
+                Debug.Log("Stopped");
                 BlockController.signalForce = new Vector3(0, 0);
                 BlockController.signaltorque = 0;
-                stopper = true;
-                stop();
+                //stopper = true;
+                //StartListener();
             }
+        }
+
+        private Vector3 rotatedpowers(Vector3 input, double angle)
+        {
+            double newX = input.x * Math.Cos(angle) - input.y * Math.Sin(angle);
+            double newY = input.x * Math.Sin(angle) + input.y * Math.Cos(angle);
+            return new Vector3((float)(newX), (float)(newY));
         }
     }
 }
