@@ -10,23 +10,29 @@ public class GameButtons : MonoBehaviour
 {
     public Transform robotPos;
     //public Transform Blocks;
-    Vector3 startpos = new Vector3(0, 0.3255587f, 0);
+    public static Vector3 startpos = new Vector3(0, 0.3255587f, 0);
     float startheading = 0;
     public static bool reset = false;
     bool first = true;
     public Rigidbody rb;
-
-
+    public Rigidbody wheel1;
+    public Rigidbody wheel2;
+    public Rigidbody wheel3;
+    public Rigidbody wheel4;
 
     public void ResetClick()
     {
-        robotPos.SetPositionAndRotation(startpos, Quaternion.Euler(0, startheading, 0));
         reset = true;
+        robotPos.SetPositionAndRotation(startpos, Quaternion.Euler(0, startheading, 0));
         rb.velocity = new Vector3(0, 0, 0);
-        BlockController.encoderCountLeft = 0;
-        BlockController.encoderCountRight = 0;
-        BlockController.encoderCountStrafe = 0;
-        BlockController.startheading = startheading;
+        wheel1.velocity = new Vector3(0, 0, 0);
+        wheel2.velocity = new Vector3(0, 0, 0);
+        wheel3.velocity = new Vector3(0, 0, 0);
+        wheel4.velocity = new Vector3(0, 0, 0);
+        WheelController.encoderCountLeft = 0;
+        WheelController.encoderCountRight = 0;
+        WheelController.encoderCountStrafe = 0;
+        WheelController.startheading = startheading;
     }
 
     public void exit()

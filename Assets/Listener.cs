@@ -12,7 +12,7 @@ namespace Assets
 {
     class Listener
     {
-        public string[] powers = new string[3];
+        public string[] powers = new string[4];
         public static bool centric = false;
         Thread listenerThread = null;
 
@@ -20,7 +20,10 @@ namespace Assets
         private bool odoisRequested = false;
         private bool gyroisRequested = false;
         public string runningstring;
-
+        public double input_ul = 0;
+        public double input_ur = 0;
+        public double input_bl = 0;
+        public double input_br = 0;
 
         public void StartListener()
         {
@@ -29,6 +32,11 @@ namespace Assets
                 listenerThread = new Thread(StartListeningThread);
             }
             listenerThread.Start();
+        }
+
+        public void stopListener()
+        {
+            listenerThread.Abort();
         }
 
         public void StartListeningThread()
@@ -43,7 +51,7 @@ namespace Assets
             // host running the application.  
             IPHostEntry ipHostInfo = Dns.GetHostEntry(Dns.GetHostName());
             IPAddress ipAddress = ipHostInfo.AddressList[1];
-            Debug.Log(ipAddress);
+            //Debug.Log(ipAddress);
             IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 8719);
 
             // Create a TCP/IP socket.  
@@ -92,13 +100,13 @@ namespace Assets
 
                     if (odoisRequested && gyroisRequested)
                     {
-                        runningstring = "O" + "," + BlockController.encoderCountLeft.ToString() + "," + BlockController.encoderCountRight.ToString() + "," + BlockController.encoderCountStrafe.ToString() + "," + BlockController.heading.ToString();
+                        runningstring = "O" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString() + "," + WheelController.heading.ToString();
 
                         send(runningstring, handler);
                         runningstring = "";
                     }else if (odoisRequested)
                     {
-                        runningstring = "O" + "," + BlockController.encoderCountLeft.ToString() + "," + BlockController.encoderCountRight.ToString() + "," + BlockController.encoderCountStrafe.ToString();
+                        runningstring = "O" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString();
                         send(runningstring, handler);
                         runningstring = "";
                     }
@@ -113,6 +121,16 @@ namespace Assets
             {
                 Debug.Log(e.ToString());
             }
+        }
+
+        bool SocketConnected(Socket s)
+        {
+            bool part1 = s.Poll(1000, SelectMode.SelectRead);
+            bool part2 = (s.Available == 0);
+            if (part1 && part2)
+                return false;
+            else
+                return true;
         }
 
         public void stop(Socket handler)
@@ -135,7 +153,7 @@ namespace Assets
 
         private void Parse(string messageFull)
         {
-            Debug.Log(messageFull);
+            //Debug.Log(messageFull);
             message = messageFull.ToCharArray();
 
             fullpowers = "";
@@ -149,15 +167,23 @@ namespace Assets
             {
                 powers = fullpowers.Split('|');
 
-                BlockController.signalForce.x = float.Parse(powers[0]);
-                BlockController.signalForce.y = float.Parse(powers[1]);
-                BlockController.signaltorque = float.Parse(powers[2]);
-                BlockController.signalForce.Scale(new Vector3(BlockController.newsignalScale, BlockController.newsignalScale));
-                if(message[0] == 'c')
+                //WheelController.signalForce.x = float.Parse(powers[0]);
+                //WheelController.signalForce.y = float.Parse(powers[1]);
+                //WheelController.signaltorque = float.Parse(powers[2]);
+                //WheelController.signalForce.Scale(new Vector3(WheelController.newsignalScale, WheelController.newsignalScale));
+                input_ul = float.Parse(powers[0]);
+                input_ur = float.Parse(powers[1]);
+                input_bl = float.Parse(powers[2]);
+                input_br = float.Parse(powers[3]);
+                if (message[0] == 'c')
                 {
                     centric = true;
                 }
-                Debug.Log(BlockController.signalForce);
+                else if(message[0] == 'r')
+                {
+                    centric = false;
+                }
+                //Debug.Log(WheelController.signalForce);
             } 
             else if (message[0] == 'O')
             {
@@ -170,18 +196,15 @@ namespace Assets
             else if (messageFull.Contains("stop"))
             {
                 Debug.Log("Stopped");
-                BlockController.signalForce = new Vector3(0, 0);
-                BlockController.signaltorque = 0;
                 //stopper = true;
                 //StartListener();
             }
-        }
-
-        private Vector3 rotatedpowers(Vector3 input, double angle)
-        {
-            double newX = input.x * Math.Cos(angle) - input.y * Math.Sin(angle);
-            double newY = input.x * Math.Sin(angle) + input.y * Math.Cos(angle);
-            return new Vector3((float)(newX), (float)(newY));
+            else if (messageFull.Contains("start"))
+            {
+                Debug.Log("Started");
+                //stopper = true;
+                //StartListener();
+            }
         }
     }
 }
