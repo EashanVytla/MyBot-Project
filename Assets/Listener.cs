@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -19,15 +20,20 @@ namespace Assets
         public bool stopper = false;
         private bool odoisRequested = false;
         private bool gyroisRequested = false;
+        private bool poseisRequested = false;
         public string runningstring;
         public double input_ul = 0;
         public double input_ur = 0;
         public double input_bl = 0;
         public double input_br = 0;
+        public bool clientDisconnecting = false;
+        public bool wrongversion = false;
+        private bool first = true;
+       
 
         public void StartListener()
         {
-            if(listenerThread == null)
+            if (listenerThread == null)
             {
                 listenerThread = new Thread(StartListeningThread);
             }
@@ -39,19 +45,42 @@ namespace Assets
             listenerThread.Abort();
         }
 
+        private Vector3 pose;
+
+        public void setPose(Vector3 RobotPose)
+        {
+            pose = RobotPose;
+        }
+
         public void StartListeningThread()
         {
             stopper = false;
             string recievedMessage;
             byte[] bytes = new Byte[1024];
-           
+
 
             // Establish the local endpoint for the socket.  
             // Dns.GetHostName returns the name of the
             // host running the application.  
             IPHostEntry ipHostInfo = Dns.GetHostEntry(Dns.GetHostName());
             IPAddress ipAddress = ipHostInfo.AddressList[1];
-            //Debug.Log(ipAddress);
+
+            var address = NetworkInterface
+                .GetAllNetworkInterfaces()
+                .Where(c => c.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
+                .SelectMany(c => c.GetIPProperties().UnicastAddresses)
+                .Where(c => c.Address.AddressFamily == AddressFamily.InterNetwork)
+                .Select(c => c.Address.ToString())
+                .ToList();
+
+            foreach (var myaddress in address)
+            {
+                if (myaddress.StartsWith("192."))
+                {
+                     IPAddress.TryParse(myaddress, out ipAddress);
+                }
+            }
+            
             IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 8719);
 
             // Create a TCP/IP socket.  
@@ -72,48 +101,77 @@ namespace Assets
                 // Start listening for connections.  
                 do
                 {
-                    handler = listener.Accept();
-                    recievedMessage = null;
-
-                    // An incoming connection needs to be processed.  
-                    while (true)
+                    if (!wrongversion)
                     {
-                        int bytesRec = handler.Receive(bytes);
-                        recievedMessage = Encoding.ASCII.GetString(bytes, 0, bytesRec);
+                        handler = listener.Accept();
+                        recievedMessage = null;
 
-                        if (recievedMessage.IndexOf(",") > -1)
+                        // An incoming connection needs to be processed.  
+                        while (true)
                         {
-                            break;
+                            int bytesRec = handler.Receive(bytes);
+                            recievedMessage = Encoding.ASCII.GetString(bytes, 0, bytesRec);
+
+                            if (recievedMessage.IndexOf(",") > -1)
+                            {
+                                break;
+                            }
                         }
-                    }
-                    i++;
+                        i++;
 
-                    try
-                    {
-                        Parse(recievedMessage);
-                    }
-                    catch
-                    {
-                        Debug.Log("None");
-                    }
+                        try
+                        {
+                            Parse(recievedMessage);
+                        }
+                        catch
+                        {
+                            Debug.Log("None");
+                        }
 
+                       // Debug.Log(pose);
 
-                    if (odoisRequested && gyroisRequested)
-                    {
-                        runningstring = "O" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString() + "," + WheelController.heading.ToString();
+                        if (odoisRequested)
+                        {
+                            runningstring = "O" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString();
+                        }
 
-                        send(runningstring, handler);
-                        runningstring = "";
-                    }else if (odoisRequested)
-                    {
-                        runningstring = "O" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString();
-                        send(runningstring, handler);
-                        runningstring = "";
-                    }
+                        if (gyroisRequested)
+                        {
+                            runningstring = "G" + WheelController.heading.ToString();
+                        }
 
-                    if (stopper)
-                    {
-                        stop(handler);
+                        if (poseisRequested)
+                        {
+                            runningstring = "P" + "," + pose.x.ToString() + "," + pose.z.ToString();
+                        }
+
+                        if (odoisRequested && gyroisRequested)
+                        {
+                            runningstring = "O,G" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString() + "," + WheelController.heading.ToString();
+                        }
+                        
+                        if (gyroisRequested && poseisRequested) {
+                            runningstring = "P,G" + "," + pose.x.ToString() + "," + pose.z.ToString() + "," + WheelController.heading.ToString();
+                        }
+                        
+                        if (poseisRequested && odoisRequested) {
+                            runningstring = "O,P" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString() + "," + pose.x.ToString() + "," + pose.z.ToString();
+                        }
+                        
+                        if (gyroisRequested && poseisRequested && odoisRequested) {
+                            runningstring = "O,G,P" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString() + "," + pose.x.ToString() + "," + pose.z.ToString() + "," + WheelController.heading.ToString();
+                        }
+
+                        if(gyroisRequested || poseisRequested || odoisRequested)
+                        {
+                            send(runningstring, handler);
+                            runningstring = "";
+                        }
+
+                        if (stopper)
+                        {
+                            stop(handler);
+                        }
                     }
                 } while (!stopper);
             }
@@ -121,16 +179,6 @@ namespace Assets
             {
                 Debug.Log(e.ToString());
             }
-        }
-
-        bool SocketConnected(Socket s)
-        {
-            bool part1 = s.Poll(1000, SelectMode.SelectRead);
-            bool part2 = (s.Available == 0);
-            if (part1 && part2)
-                return false;
-            else
-                return true;
         }
 
         public void stop(Socket handler)
@@ -153,12 +201,23 @@ namespace Assets
 
         private void Parse(string messageFull)
         {
-            //Debug.Log(messageFull);
+            if (first)
+            {
+                if (messageFull.Contains("v1.1"))
+                {
+                    wrongversion = false;
+                }
+                else
+                {
+                    wrongversion = true;
+                }
+                first = false;
+            }
             message = messageFull.ToCharArray();
 
             fullpowers = "";
 
-            for(int i = 2; i < (message.Length - 1); i++)
+            for (int i = 2; i < (message.Length - 1); i++)
             {
                 fullpowers += message[i];
             }
@@ -167,10 +226,6 @@ namespace Assets
             {
                 powers = fullpowers.Split('|');
 
-                //WheelController.signalForce.x = float.Parse(powers[0]);
-                //WheelController.signalForce.y = float.Parse(powers[1]);
-                //WheelController.signaltorque = float.Parse(powers[2]);
-                //WheelController.signalForce.Scale(new Vector3(WheelController.newsignalScale, WheelController.newsignalScale));
                 input_ul = float.Parse(powers[0]);
                 input_ur = float.Parse(powers[1]);
                 input_bl = float.Parse(powers[2]);
@@ -179,31 +234,39 @@ namespace Assets
                 {
                     centric = true;
                 }
-                else if(message[0] == 'r')
+                else if (message[0] == 'r')
                 {
                     centric = false;
                 }
-                //Debug.Log(WheelController.signalForce);
-            } 
-            else if (message[0] == 'O')
+            }
+            
+            if (message[0] == 'O')
             {
                 odoisRequested = true;
             }
-            else if (message[0] == 'G')
+            
+            if (message[0] == 'G')
             {
                 gyroisRequested = true;
             }
+            
+            if(message[0] == 'P')
+            {
+                poseisRequested = true;
+            }
+            
             else if (messageFull.Contains("stop"))
             {
                 Debug.Log("Stopped");
-                //stopper = true;
-                //StartListener();
+                clientDisconnecting = true;
             }
             else if (messageFull.Contains("start"))
             {
-                Debug.Log("Started");
-                //stopper = true;
-                //StartListener();
+                Debug.Log("Start");
+                WheelController.encoderCountLeft = 0;
+                WheelController.encoderCountRight = 0;
+                WheelController.encoderCountStrafe = 0;
+                clientDisconnecting = false;
             }
         }
     }

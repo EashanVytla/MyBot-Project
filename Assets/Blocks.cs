@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class Blocks : MonoBehaviour
 {
-    public GameObject[] block = new GameObject[12];
+    public Transform[] block = new Transform[12];
     public Vector3[] startpos = new Vector3[12];
     public Transform platform1;
     public Transform platform2;

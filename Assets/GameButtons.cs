@@ -11,7 +11,7 @@ public class GameButtons : MonoBehaviour
     public Transform robotPos;
     //public Transform Blocks;
     public static Vector3 startpos = new Vector3(0, 0.3255587f, 0);
-    float startheading = 0;
+    public static float startheading = 0;
     public static bool reset = false;
     bool first = true;
     public Rigidbody rb;
@@ -23,22 +23,23 @@ public class GameButtons : MonoBehaviour
     public void ResetClick()
     {
         reset = true;
-        robotPos.SetPositionAndRotation(startpos, Quaternion.Euler(0, startheading, 0));
+        wheel1.position = Quaternion.Euler(0, startheading, 0) * ((startpos / 10) + new Vector3(0.2f, 0, 0.2f));
+        wheel2.position = Quaternion.Euler(0, startheading, 0) * ((startpos / 10) + new Vector3(-0.2f, 0, 0.2f));
+        wheel3.position = Quaternion.Euler(0, startheading, 0) * ((startpos / 10) + new Vector3(-0.2f, 0, -0.2f));
+        wheel4.position = Quaternion.Euler(0, startheading, 0) * ((startpos / 10) + new Vector3(0.2f, 0, -0.2f));
+        robotPos.SetPositionAndRotation(startpos/10, Quaternion.Euler(0, startheading, 0));
         rb.velocity = new Vector3(0, 0, 0);
-        wheel1.velocity = new Vector3(0, 0, 0);
-        wheel2.velocity = new Vector3(0, 0, 0);
-        wheel3.velocity = new Vector3(0, 0, 0);
-        wheel4.velocity = new Vector3(0, 0, 0);
         WheelController.encoderCountLeft = 0;
         WheelController.encoderCountRight = 0;
         WheelController.encoderCountStrafe = 0;
         WheelController.startheading = startheading;
     }
 
+
     public void exit()
     {
         ResetClick();
-        SceneManager.LoadScene("MainMenuScene");
+        SceneManager.LoadScene("Menu 3D");
     }
 
     //1.75970711674 is the scale factor from encoder counts to inches
@@ -63,9 +64,9 @@ public class GameButtons : MonoBehaviour
 
     public void startFeild()
     {
-        startpos.x = -10;
-        startpos.z = 15;
-        startheading = 180;
+        startpos.x = 9.5f;
+        startpos.z = -13f;
+        startheading = 0;
         ResetClick();
     }
 

@@ -9,7 +9,7 @@ namespace Assets
 {
     class ForceCalculator
     {
-        public float radius = (float)((4)/78.74);
+        public float radius = (float)((4) / 78.74);
 
         private const float l = 5.8245f;
         private const float b = 4.811f;
@@ -27,12 +27,12 @@ namespace Assets
         {
             if (OptionsInterface.MotorType == 0)
             {
-                gearatio = 1/OptionsInterface.Ratio;
+                gearatio = 1 / OptionsInterface.Ratio;
                 stallT = (float)(OptionsInterface.Ratio * 8.75); //Stall torque of the motor
                 stallI = 11.5f; //Rtall current of the motor
                 Kt = stallT / stallI; //Torque constant of the motor
                 resistance = 12 / stallI; //Resistance of the motor
-                freespeed = ((6600 / OptionsInterface.Ratio) * 2 * (float)Math.PI)/60; //No-Load Radians per Second
+                freespeed = ((6600 / OptionsInterface.Ratio) * 2 * (float)Math.PI) / 60; //No-Load Radians per Second
                 freecurrent = 0.5f; //No-Load Current
                 Kv = freespeed / (12 - (freecurrent * resistance)); //Angular-Velocity Constant under no-load
             }
@@ -58,7 +58,7 @@ namespace Assets
             double BackEMF = 0;
             float forwardforce = 0;
 
-            BackEMF = -((Math.Pow(gearatio, 2) * Kt) / (Kv * resistance * Math.Pow(radius, 2)) * (currentvelo/10));
+            BackEMF = -((Math.Pow(gearatio, 2) * Kt) / (Kv * resistance * Math.Pow(radius, 2)) * (currentvelo / 10));
             //Debug.Log("Current Velo: " + currentvelo);
             forwardforce = ((gearatio * Kt) / (resistance * radius)) * inputvoltage;
 
@@ -91,7 +91,7 @@ namespace Assets
             Vector3 overall = upleft + backleft + upright + backright;
             Vector3 rot = (upleft * (-1 / (l + b))) + (backleft * (-1 / (l + b))) + (upright * (1 / (l + b))) + (backright * (1 / (l + b)));
 
-           // Debug.Log("overall" + rot);
+            // Debug.Log("overall" + rot);
 
             return new Vector3(overall.x, rot.z, overall.z);
         }
