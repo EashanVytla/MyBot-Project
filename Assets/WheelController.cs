@@ -1,10 +1,8 @@
 ﻿using Assets;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Threading;
+using TMPro;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 public class WheelController : MonoBehaviour
 {
@@ -36,10 +34,11 @@ public class WheelController : MonoBehaviour
     public Rigidbody wheel3rb;
     public Rigidbody wheel4rb;
 
-    public Transform wheel1t;
-    public Transform wheel2t;
-    public Transform wheel3t;
-    public Transform wheel4t;
+
+    public float friction;
+
+    private const float l = 5.8245f;
+    private const float b = 4.811f;
 
     public ConfigurableJoint wheel1;
 
@@ -49,9 +48,9 @@ public class WheelController : MonoBehaviour
 
     public ConfigurableJoint wheel4;
 
+
     ForceCalculator forceCalc;
 
-    float x, y, z;
 
     int prevQual = 0;
 
@@ -59,6 +58,7 @@ public class WheelController : MonoBehaviour
 
     TeleOp tele;
     public GameObject ErrorScreenVersion;
+    public static string os;
 
     private void Awake()
     {
@@ -66,6 +66,7 @@ public class WheelController : MonoBehaviour
         GameButtons.startpos = Vector3.zero;
         startheading = 0;
         tele = new TeleOp();
+        os = SystemInfo.operatingSystem;
     }
 
     // Start is called before the first frame update
@@ -75,17 +76,36 @@ public class WheelController : MonoBehaviour
 
         list = new Listener();
 
+
         list.StartListener();
     }
 
     Vector3 forceov = Vector3.zero;
-
+    int prevRate;
+    public TMP_Text poseUpdateTxt;
 
     void Update()
     {
+        list.setPose(connectedbody.position * 39.37f);
+
+        poseUpdateTxt.text = "(" + Math.Round((connectedbody.position * 39.37f).x, 1) + ", " + Math.Round((connectedbody.position * 39.37f).z, 1) + ", " + Math.Round(globalheading, 1) + ")";
+        if (OptionsInterface.framerate != prevRate)
+        {
+            if (OptionsInterface.framerate == 0)
+            {
+                Application.targetFrameRate = 30;
+            }
+            else if (OptionsInterface.framerate == 1)
+            {
+                Application.targetFrameRate = 60;
+            }
+        }
+        prevRate = OptionsInterface.framerate;
+
         if (list.wrongversion)
         {
             ErrorScreenVersion.SetActive(true);
+            list.wrongversion = false;
         }
 
         if (OptionsInterface.Mass != 0)
@@ -100,7 +120,7 @@ public class WheelController : MonoBehaviour
             list.input_br = 0;
             list.input_ur = 0;
 
-            if ((connectedbody.transform.position - (GameButtons.startpos / 10)).magnitude == 0/* && connectedbody.rotation.eulerAngles.y - GameButtons.startheading == 0.0*/)
+            if ((connectedbody.transform.position - (GameButtons.startpos / 39.37f)).magnitude == 0/* && connectedbody.rotation.eulerAngles.y - GameButtons.startheading == 0.0*/)
             {
                 GameButtons.reset = false;
                 encoderCountRight = 0.0;
@@ -109,10 +129,10 @@ public class WheelController : MonoBehaviour
             }
         }
 
-        graphicWheel1.Rotate(new Vector3((getProjected(wheel1.targetAngularVelocity, 45) * 180 / Mathf.PI) * 10 * Time.deltaTime, 0, 0));
-        graphicWheel2.Rotate(new Vector3((getProjected(wheel2.targetAngularVelocity, -45) * 180 / Mathf.PI) * 10 * Time.deltaTime, 0, 0));
-        graphicWheel3.Rotate(new Vector3((getProjected(wheel3.targetAngularVelocity, 45) * 180 / Mathf.PI) * 10 * Time.deltaTime, 0, 0));
-        graphicWheel4.Rotate(new Vector3((getProjected(wheel4.targetAngularVelocity, -45) * 180 / Mathf.PI) * 10 * Time.deltaTime, 0, 0));
+        graphicWheel1.Rotate(new Vector3(getProjected(-wheel1.targetAngularVelocity, -45), 0, 0));
+        graphicWheel2.Rotate(new Vector3(getProjected(wheel2.targetAngularVelocity, 45), 0, 0));
+        graphicWheel3.Rotate(new Vector3(getProjected(wheel3.targetAngularVelocity, 45), 0, 0));
+        graphicWheel4.Rotate(new Vector3(getProjected(-wheel4.targetAngularVelocity, -45), 0, 0));
 
         if (!OptionsInterface.QualityOverride)
         {
@@ -135,17 +155,19 @@ public class WheelController : MonoBehaviour
         tele.Disable();
     }
 
+    bool prevcld = false;
+    public static Vector3 initWheel1 = new Vector3(0, 0, 0);
+    public static Vector3 initWheel2 = new Vector3(0, 0, 0);
+    public static Vector3 initWheel3 = new Vector3(0, 0, 0);
+    public static Vector3 initWheel4 = new Vector3(0, 0, 0);
+
     // Update is called once per frame
     void FixedUpdate()
     {
-        //Odometry Delta Update
-        Vector3 deltaPosRight = RightOdoWheel.position - prevPosRight;
-        Vector3 deltaPosLeft = LeftOdoWheel.position - prevPosLeft;
-        Vector3 deltaPosStrafe = StrafeOdoWheel.position - prevPosStrafe;
-
-        prevPosRight = RightOdoWheel.position;
-        prevPosLeft = LeftOdoWheel.position;
-        prevPosStrafe = StrafeOdoWheel.position;
+        double Wheel1Velo = getVelo(wheel1rb, 45);
+        double Wheel2Velo = getVelo(wheel2rb, -45);
+        double Wheel3Velo = getVelo(wheel3rb, -45);
+        double Wheel4Velo = getVelo(wheel4rb, 45);
 
         //Getting Different Heading for encoder translation.
         heading = connectedbody.transform.rotation.eulerAngles.y - startheading;
@@ -153,34 +175,36 @@ public class WheelController : MonoBehaviour
         //Debug.Log(heading);
 
         //Debug.Log(globalheading);
-        encoderCountRight += ((rotated(deltaPosRight, heading * (Math.PI / 180)).z) / 0.05);
-        encoderCountLeft += ((rotated(deltaPosLeft, heading * (Math.PI / 180)).z) / 0.05);
-        encoderCountStrafe += ((rotated(deltaPosStrafe, heading * (Math.PI / 180)).x) / 0.05);
-        list.setPose(connectedbody.position * 39.37f);
+        encoderCountRight += ((rotated(RightOdoWheel.position - prevPosRight, heading * (Math.PI / 180)).z) / 0.05);
+        encoderCountLeft += ((rotated(LeftOdoWheel.position - prevPosLeft, heading * (Math.PI / 180)).z) / 0.05);
+        encoderCountStrafe += ((rotated(StrafeOdoWheel.position - prevPosStrafe, heading * (Math.PI / 180)).x) / 0.05);
 
+        prevPosRight = RightOdoWheel.position;
+        prevPosLeft = LeftOdoWheel.position;
+        prevPosStrafe = StrafeOdoWheel.position;
 
         //Forces
         if (!GameButtons.reset && !list.clientDisconnecting)
         {
-            float[] codeForces = { forceCalc.update((float)(list.input_ur), getVelo(wheel1rb, 45)),
-                                forceCalc.update((float)(list.input_ul), getVelo(wheel2rb, -45)),
-                                forceCalc.update((float)(list.input_bl), getVelo(wheel3rb, 45)),
-                                forceCalc.update((float)(list.input_br), getVelo(wheel4rb, -45)) };
+            float[] codeForces = { forceCalc.update((float)(list.input_ul), getVelo(wheel1rb, 45)),
+                                forceCalc.update((float)(list.input_ur), getVelo(wheel2rb, -45)),
+                                forceCalc.update((float)(list.input_bl), getVelo(wheel3rb, -45)),
+                                forceCalc.update((float)(list.input_br), getVelo(wheel4rb, 45)) };
 
-            float[] teleForces = { forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[0], getVelo(wheel1rb, 45)),
-                                forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[1], getVelo(wheel2rb, -45)),
-                                forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[2], getVelo(wheel3rb, 45)),
-                                forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[3], getVelo(wheel4rb, -45)) };
+            float[] teleForces = { forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[1], getVelo(wheel1rb, 45)),
+                                forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[0], getVelo(wheel2rb, -45)),
+                                forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[2], getVelo(wheel3rb, -45)),
+                                forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[3], getVelo(wheel4rb, 45)) };
 
 
-            forceov = forceCalc.getForce(codeForces[1], codeForces[2], codeForces[0], codeForces[3]) + forceCalc.getForce(teleForces[1], teleForces[2], teleForces[0], teleForces[3]);
+            forceov = forceCalc.getForce(codeForces[0], codeForces[2], codeForces[1], codeForces[3]) + forceCalc.getForce(teleForces[0], teleForces[2], teleForces[1], teleForces[3]);
 
             wheel1.targetAngularVelocity = (new Vector3(forceov.z + (forceov.y * (forceCalc.getTrackWidth() + forceCalc.getWheelBase())), 0, forceov.x) * (OptionsInterface.WheelDiameter / 2)); //+
             wheel2.targetAngularVelocity = (new Vector3(forceov.z - (forceov.y * (forceCalc.getTrackWidth() + forceCalc.getWheelBase())), 0, forceov.x) * (OptionsInterface.WheelDiameter / 2)); //-
             wheel3.targetAngularVelocity = (new Vector3(forceov.z - (forceov.y * (forceCalc.getTrackWidth() + forceCalc.getWheelBase())), 0, forceov.x) * (OptionsInterface.WheelDiameter / 2)); //-
             wheel4.targetAngularVelocity = (new Vector3(forceov.z + (forceov.y * (forceCalc.getTrackWidth() + forceCalc.getWheelBase())), 0, forceov.x) * (OptionsInterface.WheelDiameter / 2)); //+
         }
-        else if(GameButtons.reset)
+        else if (GameButtons.reset)
         {
             wheel1.targetAngularVelocity = (new Vector3(0, 0, 0));
             wheel2.targetAngularVelocity = (new Vector3(0, 0, 0));
@@ -195,21 +219,66 @@ public class WheelController : MonoBehaviour
             wheel3rb.angularVelocity = (new Vector3(0, 0, 0));
             wheel4rb.angularVelocity = (new Vector3(0, 0, 0));
 
+            encoderCountLeft = 0;
+            encoderCountRight = 0;
+            encoderCountStrafe = 0;
+
             forceov = Vector3.zero;
-        }else if (list.clientDisconnecting)
+
+            initWheel1 = wheel1rb.position;
+            initWheel2 = wheel2rb.position;
+            initWheel3 = wheel3rb.position;
+            initWheel4 = wheel4rb.position;
+        } else if (list.clientDisconnecting)
         {
-            float[] teleForces = { forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[0], getVelo(wheel1rb, 45)),
-                                forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[1], getVelo(wheel2rb, -45)),
-                                forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[2], getVelo(wheel3rb, 45)),
-                                forceCalc.update(setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[3], getVelo(wheel4rb, -45)) };
+            float freespeed = (((6600 * (OptionsInterface.WheelDiameter/1.968504f)) / OptionsInterface.Ratio) * 2 * (float)Math.PI) / 60;
+            JointDrive drive = new JointDrive();
+            drive.positionDamper = (8.75f * OptionsInterface.Ratio) / (OptionsInterface.WheelDiameter/1.968504f) * freespeed;
+            drive.maximumForce = 3.402823e+38f;
 
-            forceov = forceCalc.getForce(teleForces[1], teleForces[2], teleForces[0], teleForces[3]);
+            float wheel1power = setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[1] * freespeed;
+            float wheel2power = setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[0] * freespeed;
+            float wheel3power = setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[2] * freespeed;
+            float wheel4power = setPower(-tele.getOverallVec().x, tele.getOverallVec().z, tele.getOverallVec().y)[3] * freespeed;
 
-            wheel1.targetAngularVelocity = (new Vector3(forceov.z + (forceov.y * (forceCalc.getTrackWidth() + forceCalc.getWheelBase())), 0, forceov.x) * (OptionsInterface.WheelDiameter / 2)); //+
-            wheel2.targetAngularVelocity = (new Vector3(forceov.z - (forceov.y * (forceCalc.getTrackWidth() + forceCalc.getWheelBase())), 0, forceov.x) * (OptionsInterface.WheelDiameter / 2)); //-
-            wheel3.targetAngularVelocity = (new Vector3(forceov.z - (forceov.y * (forceCalc.getTrackWidth() + forceCalc.getWheelBase())), 0, forceov.x) * (OptionsInterface.WheelDiameter / 2)); //-
-            wheel4.targetAngularVelocity = (new Vector3(forceov.z + (forceov.y * (forceCalc.getTrackWidth() + forceCalc.getWheelBase())), 0, forceov.x) * (OptionsInterface.WheelDiameter / 2)); //+
+            forceov = getForce(wheel1power, wheel2power, wheel3power, wheel4power);
+
+            wheel1.angularYZDrive = drive;
+            wheel2.angularYZDrive = drive;
+            wheel3.angularYZDrive = drive;
+            wheel4.angularYZDrive = drive;
+
+            wheel1.angularXDrive = drive;
+            wheel2.angularXDrive = drive;
+            wheel3.angularXDrive = drive;
+            wheel4.angularXDrive = drive;
+
+            wheel1.targetAngularVelocity = new Vector3(forceov.z + (forceov.y * (l + b)), 0, forceov.x); //+
+            wheel2.targetAngularVelocity = new Vector3(forceov.z - (forceov.y * (l + b)), 0, forceov.x); //-
+            wheel3.targetAngularVelocity = new Vector3(forceov.z - (forceov.y * (l + b)), 0, forceov.x); //-
+            wheel4.targetAngularVelocity = new Vector3(forceov.z + (forceov.y * (l + b)), 0, forceov.x); //+
         }
+    }
+
+    bool first = true;
+
+    public Vector3 getForce(float ul, float bl, float ur, float br)
+    {
+        Vector3 upleft = new Vector3(0, 0, ul);
+        Vector3 backleft = new Vector3(0, 0, bl);
+        Vector3 upright = new Vector3(0, 0, ur);
+        Vector3 backright = new Vector3(0, 0, br);
+
+        upleft = Quaternion.Euler(0, -45, 0) * upleft;
+        backleft = Quaternion.Euler(0, 45, 0) * backleft;
+        upright = Quaternion.Euler(0, 45, 0) * upright;
+        backright = Quaternion.Euler(0, -45, 0) * backright;
+
+        Vector3 overall = upleft + backleft + upright + backright;
+        Vector3 rot = (upleft * (-1 / (l + b))) + (backleft * (-1 / (l + b))) + (upright * (1 / (l + b))) + (backright * (1 / (l + b)));
+        Vector3 velo = new Vector3(overall.x, -rot.x, overall.z)/4;
+
+        return velo;
     }
 
     float getVelo(Rigidbody og, float angle)
@@ -221,7 +290,7 @@ public class WheelController : MonoBehaviour
 
     float getProjected(Vector3 val, float angle)
     {
-        Vector3 dir = Quaternion.Euler(0, (float)heading + angle, 0) * transform.forward;
+        Vector3 dir = Quaternion.Euler(0, angle, 0) * transform.forward;
 
         return Vector3.Dot(val, dir);
     }

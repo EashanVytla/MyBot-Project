@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Assets
@@ -15,7 +13,6 @@ namespace Assets
     {
         public string[] powers = new string[4];
         public static bool centric = false;
-        Thread listenerThread = null;
 
         public bool stopper = false;
         private bool odoisRequested = false;
@@ -26,23 +23,51 @@ namespace Assets
         public double input_ur = 0;
         public double input_bl = 0;
         public double input_br = 0;
-        public bool clientDisconnecting = false;
+        public bool clientDisconnecting = true;
+        //public bool init = false;
         public bool wrongversion = false;
-        private bool first = true;
-       
+        private bool firstp = true;
+        string versionnum;
+        int currentThread = 0;
+        List<Thread> listenerThread = new List<Thread>();
+
+        public Listener()
+        {
+             versionnum = "v1.4,";
+        }
+
+
+        Socket listener = null;
+        Socket handler = null;
+
 
         public void StartListener()
         {
-            if (listenerThread == null)
+            listenerThread.Add(new Thread(StartListeningThread));
+            listenerThread[0].Start();
+        }
+
+        public void RestartListener()
+        {
+            if(listener != null)
             {
-                listenerThread = new Thread(StartListeningThread);
+                stop(listener);
             }
-            listenerThread.Start();
+
+            if(handler != null)
+            {
+                stop(handler);
+            }
+            stopper = true;
+            stopListener();
+            currentThread++;
+            listenerThread.Add(new Thread(StartListeningThread));
+            listenerThread[currentThread].Start();
         }
 
         public void stopListener()
         {
-            listenerThread.Abort();
+            listenerThread[currentThread].Abort();
         }
 
         private Vector3 pose;
@@ -52,39 +77,58 @@ namespace Assets
             pose = RobotPose;
         }
 
+        public static string[] GetAllLocalIPv4(NetworkInterfaceType _type)
+        {
+            List<string> ipAddrList = new List<string>();
+            foreach (NetworkInterface item in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                Debug.Log(item.Name);
+                if (item.NetworkInterfaceType == _type && item.OperationalStatus == OperationalStatus.Up)
+                {
+                    foreach (UnicastIPAddressInformation ip in item.GetIPProperties().UnicastAddresses)
+                    {
+                        if (ip.Address.AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            ipAddrList.Add(ip.Address.ToString());
+                        }
+                    }
+                }
+            }
+            return ipAddrList.ToArray();
+        }
+
         public void StartListeningThread()
         {
             stopper = false;
             string recievedMessage;
             byte[] bytes = new Byte[1024];
 
+            IPAddress ipAddress = null;
 
-            // Establish the local endpoint for the socket.  
-            // Dns.GetHostName returns the name of the
-            // host running the application.  
-            IPHostEntry ipHostInfo = Dns.GetHostEntry(Dns.GetHostName());
-            IPAddress ipAddress = ipHostInfo.AddressList[1];
-
-            var address = NetworkInterface
-                .GetAllNetworkInterfaces()
-                .Where(c => c.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
-                .SelectMany(c => c.GetIPProperties().UnicastAddresses)
-                .Where(c => c.Address.AddressFamily == AddressFamily.InterNetwork)
-                .Select(c => c.Address.ToString())
-                .ToList();
-
-            foreach (var myaddress in address)
+            /*if (WheelController.os.Contains("Mac"))
             {
-                if (myaddress.StartsWith("192."))
-                {
-                     IPAddress.TryParse(myaddress, out ipAddress);
-                }
+                IPAddress.TryParse(IPManager.GetIP(IPManager.ADDRESSFAM.IPv4), out ipAddress);
             }
-            
+            else
+            {
+
+                String[] address = GetAllLocalIPv4(NetworkInterfaceType.Wireless80211);
+
+                foreach (var myaddress in address)
+                {
+                    //myaddress
+                    IPAddress.TryParse("127.0.0.1", out ipAddress);
+                }
+
+            }*/
+
+            IPAddress.TryParse("127.0.0.1", out ipAddress);
+
+
             IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 8719);
 
             // Create a TCP/IP socket.  
-            Socket listener = new Socket(ipAddress.AddressFamily,
+            listener = new Socket(ipAddress.AddressFamily,
                 SocketType.Stream, ProtocolType.Tcp);
 
             int i = 0;
@@ -96,14 +140,17 @@ namespace Assets
                 listener.Bind(localEndPoint);
                 listener.Listen(10);
 
-                Socket handler = null;
+                handler = null;
 
                 // Start listening for connections.  
                 do
                 {
                     if (!wrongversion)
                     {
-                        handler = listener.Accept();
+                        if (clientDisconnecting)
+                        {
+                            handler = listener.Accept();
+                        }
                         recievedMessage = null;
 
                         // An incoming connection needs to be processed.  
@@ -128,7 +175,6 @@ namespace Assets
                             Debug.Log("None");
                         }
 
-                       // Debug.Log(pose);
 
                         if (odoisRequested)
                         {
@@ -167,6 +213,12 @@ namespace Assets
                             send(runningstring, handler);
                             runningstring = "";
                         }
+                        else
+                        {
+                            send("check", handler);
+                            runningstring = " ";
+                        }
+
 
                         if (stopper)
                         {
@@ -183,7 +235,10 @@ namespace Assets
 
         public void stop(Socket handler)
         {
-            handler.Shutdown(SocketShutdown.Both);
+            if (handler.Connected)
+            {
+                handler.Shutdown(SocketShutdown.Both);
+            }
             handler.Close();
         }
 
@@ -201,18 +256,17 @@ namespace Assets
 
         private void Parse(string messageFull)
         {
-            if (first)
+            if (messageFull == versionnum)
             {
-                if (messageFull.Contains("v1.1"))
-                {
-                    wrongversion = false;
-                }
-                else
-                {
-                    wrongversion = true;
-                }
-                first = false;
+                wrongversion = false;
+                clientDisconnecting = false;
             }
+            else if (clientDisconnecting && messageFull != versionnum || firstp && messageFull != versionnum)
+            {
+                wrongversion = true;
+            }
+            firstp = false;
+
             message = messageFull.ToCharArray();
 
             fullpowers = "";
@@ -267,6 +321,8 @@ namespace Assets
                 WheelController.encoderCountRight = 0;
                 WheelController.encoderCountStrafe = 0;
                 clientDisconnecting = false;
+                //init = true;
+                //while (init) { }
             }
         }
     }

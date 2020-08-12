@@ -15,17 +15,20 @@ public class OptionsInterface : MonoBehaviour
 
     public static float Mass = 40;
 
-    public static float WheelDiameter = 4;
+    public static float WheelDiameter = 50;
 
-    public static bool FC = true;
+    public static bool FC = false;
     public static float turningspeed = 1.0f;
     public static float movementspeed = 1.0f;
+    public static int DriveType = 0;
 
     public static int Quality;
     public static bool QualityOverride = false;
-    public static bool fullscreenmode = false;
+    public bool fullscreenmode = false;
+    public static int framerate = 1;
 
     public TMP_Dropdown MotorTypeIN;
+   //public TMP_Dropdown DriveTypeIN;
     public TMP_InputField RatioInput;
     public TMP_InputField MassInput;
     public TMP_InputField WheelDiameterInput;
@@ -36,14 +39,17 @@ public class OptionsInterface : MonoBehaviour
 
     public Slider QualitySlider;
     public Toggle FullScreen;
+    public TMP_Dropdown FrameRateDrp;
 
     public void Awake()
     {
         Quality = (int)Math.Round(SystemInfo.batteryLevel * 5);
+        retrieve();
     }
 
     public void startDrive()
     {
+    //    DriveTypeIN.SetValueWithoutNotify(DriveType);
         MotorTypeIN.SetValueWithoutNotify(MotorType);
         RatioInput.SetTextWithoutNotify(Ratio.ToString());
         MassInput.SetTextWithoutNotify(Mass.ToString());
@@ -52,6 +58,7 @@ public class OptionsInterface : MonoBehaviour
 
     public void startControls()
     {
+        FrameRateDrp.SetValueWithoutNotify(framerate);
         FCToggle.SetIsOnWithoutNotify(FC);
         MovementSpeed.SetValueWithoutNotify(movementspeed);
         TurningSpeed.SetValueWithoutNotify(turningspeed);
@@ -65,15 +72,16 @@ public class OptionsInterface : MonoBehaviour
 
     public void save()
     {
-        string[] lines = { MotorType.ToString(), Ratio.ToString(), Mass.ToString(), WheelDiameter.ToString(), FC.ToString(), turningspeed.ToString(), movementspeed.ToString(), Quality.ToString(), fullscreenmode.ToString(), QualityOverride.ToString() };
-        File.WriteAllLines(@"C:\Users\Public\RobotStudio_Preferences.txt", lines);
+        string[] lines = { MotorType.ToString(), Ratio.ToString(), Mass.ToString(), WheelDiameter.ToString(), FC.ToString(), turningspeed.ToString(), movementspeed.ToString(), Quality.ToString(), fullscreenmode.ToString(), QualityOverride.ToString(), DriveType.ToString(), framerate.ToString() };
+        File.WriteAllLines(Application.persistentDataPath + "/RobotStudio_Preferences.txt", lines);
     }
 
     public void retrieve()
     {
-        if (File.Exists(@"C:\Users\Public\RobotStudio_Preferences.txt"))
+        Debug.Log(Application.persistentDataPath + "/RobotStudio_Preferences.txt");
+        if (File.Exists(Application.persistentDataPath + "/RobotStudio_Preferences.txt"))
         {
-            string[] lines = File.ReadAllLines(@"C:\Users\Public\RobotStudio_Preferences.txt");
+            string[] lines = File.ReadAllLines(Application.persistentDataPath + "/RobotStudio_Preferences.txt");
             MotorType = int.Parse(lines[0]);
             Ratio = float.Parse(lines[1]);
             Mass = float.Parse(lines[2]);
@@ -84,7 +92,14 @@ public class OptionsInterface : MonoBehaviour
             Quality = int.Parse(lines[7]);
             fullscreenmode = Boolean.Parse(lines[8]);
             QualityOverride = Boolean.Parse(lines[9]);
+            DriveType = int.Parse(lines[10]);
+            framerate = int.Parse(lines[11]);
         }
+    }
+
+    public void update_framerate(int rate)
+    {
+        framerate = rate;
     }
 
     public void update_Type(int type)
@@ -98,6 +113,11 @@ public class OptionsInterface : MonoBehaviour
             MotorType = 0;
             startDrive();
         }
+    }
+
+    public void update_DType(int type)
+    {
+        DriveType = type;
     }
 
     public void update_Quality(Single quality)
