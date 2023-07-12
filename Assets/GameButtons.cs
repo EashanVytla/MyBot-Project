@@ -1,10 +1,9 @@
-﻿using Assets;
-using ICSharpCode.SharpZipLib.Zip;
+﻿using ICSharpCode.SharpZipLib.Zip;
 using SFB;
 using System.IO;
 using System.Net;
+using System.Resources;
 using TMPro;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -29,7 +28,7 @@ public class GameButtons : MonoBehaviour
     public Button button4;
     public TMP_Text Version;
     public TMP_Text currentVersionTXT;
-    public string currentVersion;
+    public readonly string CURRENT_VERSION = "1.1.5";
     public GameObject MiniUpdateNotification;
 
 
@@ -56,11 +55,6 @@ public class GameButtons : MonoBehaviour
         WheelController.encoderCountRight = 0;
         WheelController.encoderCountStrafe = 0;
         WheelController.startheading = startheading;
-    }
-
-    public void Awake()
-    {
-         currentVersion = "1.1.1";
     }
 
     public void LateUpdate()
@@ -147,16 +141,50 @@ public class GameButtons : MonoBehaviour
 
     public void Update()
     {
-        currentVersionTXT.text = "v" + currentVersion;
+        currentVersionTXT.text = "v" + CURRENT_VERSION;
+    }
+
+    public GameObject SkystoneField;
+    public GameObject UlitmateGoalField;
+    public GameObject FreightFrenzyField;
+    int fieldNum = 2;
+
+    public void changeField(int fieldNum)
+    {
+        this.fieldNum = fieldNum;
+        if (fieldNum == 0)
+        {
+            startpos.x = 36;
+            SkystoneField.active = true;
+            UlitmateGoalField.active = false;
+            FreightFrenzyField.active = false;
+        }
+        else if (fieldNum == 1)
+        {
+            startpos.x = 50;
+            SkystoneField.active = false;
+            UlitmateGoalField.active = true;
+            FreightFrenzyField.active = false;
+        }
+        else
+        {
+            startpos.x = -32.8f;
+            SkystoneField.active = false;
+            UlitmateGoalField.active = false;
+            FreightFrenzyField.active = true;
+        }
+        ResetClick();
     }
 
     private void onRemoteSettingsUpdated()
     {
-        string[] currentVersionF = currentVersion.Split('.');
+
+        string[] currentVersionF = CURRENT_VERSION.Split('.');
         string[] latestVersionF = RemoteSettings.GetString("AppVersion", "1.0.0").Split('.');
         float currentversionvalue = float.Parse(currentVersionF[0]) + (float.Parse(currentVersionF[1]) / 10) + (float.Parse(currentVersionF[2]) / 100);
         float latestversionvalue = float.Parse(latestVersionF[0]) + (float.Parse(latestVersionF[1]) / 10) + (float.Parse(latestVersionF[2]) / 100);
-        if(latestversionvalue > currentversionvalue)
+        Debug.Log(currentversionvalue + ", " + latestversionvalue);
+        if (latestversionvalue > currentversionvalue)
         {
             MiniUpdateNotification.SetActive(true);
         }
@@ -222,7 +250,7 @@ public class GameButtons : MonoBehaviour
 
     public void updateStartPosTXT()
     {
-        if(startpos.x != 0)
+        if (startpos.x != 0)
         {
             x.SetTextWithoutNotify(startpos.x.ToString());
         }
@@ -240,7 +268,19 @@ public class GameButtons : MonoBehaviour
 
     public void startFeild()
     {
-        startpos.x = 36;
+        Debug.Log("Sup");
+        if (fieldNum == 0)
+        {
+            startpos.x = 36;
+        }
+        else if (fieldNum == 1)
+        {
+            startpos.x = 50;
+        }
+        else
+        {
+            startpos.x = -32.8f;
+        }
         startpos.z = -52;
         startheading = 0;
         ResetClick();

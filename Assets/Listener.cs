@@ -33,7 +33,7 @@ namespace Assets
 
         public Listener()
         {
-             versionnum = "v1.4,";
+            versionnum = "v1.5,";
         }
 
 
@@ -49,12 +49,12 @@ namespace Assets
 
         public void RestartListener()
         {
-            if(listener != null)
+            if (listener != null)
             {
                 stop(listener);
             }
 
-            if(handler != null)
+            if (handler != null)
             {
                 stop(handler);
             }
@@ -104,23 +104,6 @@ namespace Assets
             byte[] bytes = new Byte[1024];
 
             IPAddress ipAddress = null;
-
-            /*if (WheelController.os.Contains("Mac"))
-            {
-                IPAddress.TryParse(IPManager.GetIP(IPManager.ADDRESSFAM.IPv4), out ipAddress);
-            }
-            else
-            {
-
-                String[] address = GetAllLocalIPv4(NetworkInterfaceType.Wireless80211);
-
-                foreach (var myaddress in address)
-                {
-                    //myaddress
-                    IPAddress.TryParse("127.0.0.1", out ipAddress);
-                }
-
-            }*/
 
             IPAddress.TryParse("127.0.0.1", out ipAddress);
 
@@ -195,20 +178,23 @@ namespace Assets
                         {
                             runningstring = "O,G" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString() + "," + WheelController.heading.ToString();
                         }
-                        
-                        if (gyroisRequested && poseisRequested) {
+
+                        if (gyroisRequested && poseisRequested)
+                        {
                             runningstring = "P,G" + "," + pose.x.ToString() + "," + pose.z.ToString() + "," + WheelController.heading.ToString();
                         }
-                        
-                        if (poseisRequested && odoisRequested) {
+
+                        if (poseisRequested && odoisRequested)
+                        {
                             runningstring = "O,P" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString() + "," + pose.x.ToString() + "," + pose.z.ToString();
                         }
-                        
-                        if (gyroisRequested && poseisRequested && odoisRequested) {
+
+                        if (gyroisRequested && poseisRequested && odoisRequested)
+                        {
                             runningstring = "O,G,P" + "," + WheelController.encoderCountLeft.ToString() + "," + WheelController.encoderCountRight.ToString() + "," + WheelController.encoderCountStrafe.ToString() + "," + pose.x.ToString() + "," + pose.z.ToString() + "," + WheelController.heading.ToString();
                         }
 
-                        if(gyroisRequested || poseisRequested || odoisRequested)
+                        if (gyroisRequested || poseisRequested || odoisRequested)
                         {
                             send(runningstring, handler);
                             runningstring = "";
@@ -293,22 +279,22 @@ namespace Assets
                     centric = false;
                 }
             }
-            
+
             if (message[0] == 'O')
             {
                 odoisRequested = true;
             }
-            
+
             if (message[0] == 'G')
             {
                 gyroisRequested = true;
             }
-            
-            if(message[0] == 'P')
+
+            if (message[0] == 'P')
             {
                 poseisRequested = true;
             }
-            
+
             else if (messageFull.Contains("stop"))
             {
                 Debug.Log("Stopped");
